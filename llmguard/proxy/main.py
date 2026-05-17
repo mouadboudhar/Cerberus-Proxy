@@ -13,10 +13,12 @@ from llmguard.auth.middleware import ApiKeyAuthMiddleware
 from llmguard.config.repository import SQLiteEndpointRepository
 from llmguard.db import init_db
 from llmguard.guards.input_guard import InputGuard
+from llmguard.guards.output_guard import OutputGuard
 
 logger = logging.getLogger("llmguard.proxy")
 
 _input_guard = InputGuard()
+_output_guard = OutputGuard()
 
 
 @asynccontextmanager
@@ -66,6 +68,57 @@ async def _forward(provider: str, upstream_url: str, request: Request) -> JSONRe
         raise
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return await _apply_output_guard(result)
+
+
+def _extract_assistant_content(result: dict) -> str | None:
+    try:
+        content = result["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError):
+        return None
+    return content if isinstance(content, str) else None
+
+
+async def _apply_output_guard(result: dict) -> JSONResponse:
+    action = os.getenv("LLMGUARD_OUTPUT_GUARD_ACTION", "redact").lower()
+    content = _extract_assistant_content(result)
+    if not content:
+        return JSONResponse(content=result)
+
+    if action == "block":
+        scan = await _output_guard.scan(content)
+        if not scan.passed:
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "error": "blocked_by_guard",
+                    "guard": "output_guard",
+                    "reason_code": scan.reason_code.value,
+                    "severity": scan.severity.value,
+                    "detail": scan.detail,
+                },
+            )
+        return JSONResponse(content=result)
+
+    if action == "log_only":
+        scan = await _output_guard.scan(content)
+        if not scan.passed:
+            logger.warning(
+                "output_guard log_only — would block: %s/%s — %s",
+                scan.reason_code.value,
+                scan.severity.value,
+                scan.detail,
+            )
+        return JSONResponse(content=result)
+
+    # default action: redact
+    redacted, names = _output_guard.redact(content)
+    if names:
+        result["choices"][0]["message"]["content"] = redacted
+        return JSONResponse(
+            content=result,
+            headers={"X-LLMGuard-Redacted": ",".join(names)},
+        )
     return JSONResponse(content=result)
 
 
