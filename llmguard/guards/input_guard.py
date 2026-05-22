@@ -142,6 +142,28 @@ _DEFAULT_TRANSLATE_TIMEOUT = 1.0
 _BASE64_CANDIDATE = re.compile(r"[A-Za-z0-9+/]{20,}={0,2}")
 _WORD = re.compile(r"\b[\w']+\b")
 
+# Common misspellings of attack keywords. Translation models pass typos
+# through verbatim ("ignroe" stays "ignroe"), so the English regexes never
+# match. These corrections are applied per-word before pattern matching;
+# coverage is deliberately narrow — only typos of override/persona verbs.
+_TYPO_CORRECTIONS: dict[str, str] = {
+    "ignroe": "ignore",
+    "isntructions": "instructions",
+    "previuos": "previous",
+    "disreguard": "disregard",
+    "froget": "forget",
+}
+
+_TYPO_RE = re.compile(
+    r"\b(?:" + "|".join(re.escape(t) for t in _TYPO_CORRECTIONS) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def _correct_typos(text: str) -> str:
+    """Replace known attack-keyword typos with their correct spelling."""
+    return _TYPO_RE.sub(lambda m: _TYPO_CORRECTIONS[m.group(0).lower()], text)
+
 
 def _normalise(content: str) -> str:
     nfkc = unicodedata.normalize("NFKC", content)
@@ -156,6 +178,34 @@ def _translation_suffix(detected_lang: str | None, timed_out: bool) -> str:
     if timed_out:
         suffix += " (TRANSLATION_TIMEOUT)"
     return suffix
+
+
+def _scan_text(text: str) -> GuardResult | None:
+    """Run every detector against one piece of text.
+
+    Returns a blocking GuardResult on the first hit, or None when the text is
+    clean. Typo correction is applied up front so misspelled attack keywords
+    ("ignroe all previous instructions") still match the English patterns.
+    The caller runs this on both the translated copy and the original input.
+    """
+    text = _correct_typos(text)
+
+    for pattern, reason, severity, desc in PATTERNS:
+        match = pattern.search(text)
+        if match:
+            return GuardResult(
+                passed=False,
+                reason_code=reason,
+                severity=severity,
+                detail=f"Matched pattern: {desc}",
+                matched_pattern=match.group(0),
+            )
+
+    decoded_hit = _scan_base64_payloads(text)
+    if decoded_hit is not None:
+        return decoded_hit
+
+    return _scan_density(text)
 
 
 class InputGuard(Guard):
@@ -179,31 +229,19 @@ class InputGuard(Guard):
             detected_lang = None
             translation_timed_out = True
 
-        for pattern, reason, severity, desc in PATTERNS:
-            match = pattern.search(english_content)
-            if match:
-                return GuardResult(
-                    passed=False,
-                    reason_code=reason,
-                    severity=severity,
-                    detail=f"Matched pattern: {desc}"
-                    + _translation_suffix(detected_lang, translation_timed_out),
-                    matched_pattern=match.group(0),
-                )
-
-        decoded_hit = _scan_base64_payloads(english_content)
-        if decoded_hit is not None:
-            decoded_hit.detail += _translation_suffix(
-                detected_lang, translation_timed_out
-            )
-            return decoded_hit
-
-        density_hit = _scan_density(english_content)
-        if density_hit is not None:
-            density_hit.detail += _translation_suffix(
-                detected_lang, translation_timed_out
-            )
-            return density_hit
+        # Scan the translated copy *and* the original: translation can fail
+        # open, be skipped on low detection confidence, or drop a pattern in
+        # the process, yet the original may still carry a detectable payload.
+        # Either hit blocks the request.
+        suffix = _translation_suffix(detected_lang, translation_timed_out)
+        candidates = [english_content]
+        if normalised != english_content:
+            candidates.append(normalised)
+        for candidate in candidates:
+            hit = _scan_text(candidate)
+            if hit is not None:
+                hit.detail += suffix
+                return hit
 
         return GuardResult(
             passed=True,

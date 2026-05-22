@@ -38,10 +38,18 @@ _detector = (
     .build()
 )
 
-# Translation is skipped when language detection is less certain than this; a
-# low-confidence guess is more likely to mistranslate a clean prompt into
-# something that trips the override patterns.
-_MIN_CONFIDENCE = 0.8
+# Translation is skipped when language detection is less certain than this.
+# 0.5 is lingua's standard production threshold: high enough to reject noise,
+# low enough that long mixed-language input and typo-laden prompts — which
+# legitimately score lower — still get translated and scanned rather than
+# slipping through untranslated.
+_MIN_CONFIDENCE = 0.5
+
+# When English wins detection but a non-English language scores at least this
+# fraction of the winner, English is treated as a misdetection — typos and
+# mixed wording depress the true language's score while inflating English — so
+# translation runs from that runner-up rather than being skipped.
+_RUNNER_UP_RATIO = 0.7
 
 # argostranslate models occasionally emit degenerate output: a token repeated
 # hundreds of times, or "@@" subword-merge artefacts. Such output is discarded
@@ -86,27 +94,47 @@ async def to_english(text: str) -> tuple[str, str | None]:
     """Return ``text`` as English plus the detected source language code.
 
     The second element is the ISO 639-1 code the text was translated from, or
-    ``None`` when the input is already English, undetectable, detected with
-    low confidence, or translated to no usable change. The translation runs in
-    a worker thread so the event loop stays responsive and an
+    ``None`` when the input is English, undetectable, detected too weakly to
+    risk a mistranslation, or translated to no usable change. When English
+    wins detection but a non-English language is a close runner-up, the input
+    is treated as that runner-up (see ``_RUNNER_UP_RATIO``): typo-laden and
+    mixed-language prompts routinely misdetect as English. The translation
+    runs in a worker thread so the event loop stays responsive and an
     ``asyncio.wait_for`` timeout around this coroutine can actually fire.
     """
-    detected = _detector.detect_language_of(text)
-    if detected is None or detected == Language.ENGLISH:
+    confidences = _detector.compute_language_confidence_values(text)
+    if not confidences:
         return (text, None)
 
-    # lingua exposes no detect_*_with_rules() API; the confidence for the
-    # detected language is read separately. Below the threshold the guess is
-    # too shaky to risk a mistranslation, so the original text is matched.
-    confidence = _detector.compute_language_confidence(text, detected)
-    if confidence < _MIN_CONFIDENCE:
-        logger.warning(
-            "Language confidence %.2f for %s below %.2f; skipping translation",
-            confidence,
-            detected.name,
-            _MIN_CONFIDENCE,
+    best = confidences[0]
+    if best.language == Language.ENGLISH:
+        # Trust English only when no non-English language comes close; a
+        # strong runner-up means English is likely a misdetection of a
+        # typo'd or mixed-language prompt, which must still be translated.
+        runner_up = next(
+            (c for c in confidences[1:] if c.language != Language.ENGLISH), None
         )
-        return (text, None)
+        if runner_up is None or runner_up.value < _RUNNER_UP_RATIO * best.value:
+            return (text, None)
+        logger.warning(
+            "English (%.2f) treated as misdetected %s (%.2f); translating",
+            best.value,
+            runner_up.language.name,
+            runner_up.value,
+        )
+        detected = runner_up.language
+    else:
+        detected = best.language
+        # Below the threshold the guess is too shaky to risk a
+        # mistranslation, so the original text is matched instead.
+        if best.value < _MIN_CONFIDENCE:
+            logger.warning(
+                "Language confidence %.2f for %s below %.2f; skipping translation",
+                best.value,
+                detected.name,
+                _MIN_CONFIDENCE,
+            )
+            return (text, None)
 
     from_code = detected.iso_code_639_1.name.lower()
 
