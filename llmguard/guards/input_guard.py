@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import binascii
+import difflib
 import os
 import re
 import unicodedata
@@ -48,7 +49,7 @@ PATTERNS: list[tuple[re.Pattern[str], ReasonCode, Severity, str]] = [
     # Persona switches (HIGH)
     (
         re.compile(
-            r"you\s+are\s+now\s+(?:dan|jailbreak|unrestricted|unfiltered|developer)\b",
+            r"you\s+are\s+now\s+(?:a\s+)?(?:dan|jailbreak|unrestricted|unfiltered|developer|persona)\b",
             _FLAGS,
         ),
         ReasonCode.PERSONA_SWITCH,
@@ -142,27 +143,41 @@ _DEFAULT_TRANSLATE_TIMEOUT = 1.0
 _BASE64_CANDIDATE = re.compile(r"[A-Za-z0-9+/]{20,}={0,2}")
 _WORD = re.compile(r"\b[\w']+\b")
 
-# Common misspellings of attack keywords. Translation models pass typos
-# through verbatim ("ignroe" stays "ignroe"), so the English regexes never
-# match. These corrections are applied per-word before pattern matching;
-# coverage is deliberately narrow — only typos of override/persona verbs.
-_TYPO_CORRECTIONS: dict[str, str] = {
-    "ignroe": "ignore",
-    "isntructions": "instructions",
-    "previuos": "previous",
-    "disreguard": "disregard",
-    "froget": "forget",
-}
+# Edit-distance target vocabulary for typo normalisation. Translation models
+# pass typos through verbatim ("ingore" stays "ingore"), so the English
+# patterns never match. normalize_typos() rewrites any word within fuzzy
+# distance of one of these tokens, so misspelled attacks ("ingore all
+# prveious instructons") collapse onto the canonical form before scanning.
+ATTACK_KEYWORDS: list[str] = [
+    "ignore", "disregard", "forget", "override", "bypass",
+    "pretend", "persona", "instructions", "previous",
+    "system", "prompt", "restrictions", "unrestricted",
+    "jailbreak", "dan", "roleplay", "simulate",
+]
 
-_TYPO_RE = re.compile(
-    r"\b(?:" + "|".join(re.escape(t) for t in _TYPO_CORRECTIONS) + r")\b",
-    re.IGNORECASE,
-)
+_TYPO_MIN_LEN = 4
+_TYPO_CUTOFF = 0.75
 
 
-def _correct_typos(text: str) -> str:
-    """Replace known attack-keyword typos with their correct spelling."""
-    return _TYPO_RE.sub(lambda m: _TYPO_CORRECTIONS[m.group(0).lower()], text)
+def normalize_typos(text: str) -> str:
+    """Rewrite words within fuzzy distance of an attack keyword to that keyword.
+
+    Words shorter than 4 characters are kept verbatim — at that length almost
+    everything fuzzy-matches "dan" — and a 0.75 SequenceMatcher cutoff keeps
+    benign English ("forgot" near "forget") from collapsing onto the wrong
+    canonical form unless the variant is a near-anagram (one transposition or
+    one missing character).
+    """
+    out: list[str] = []
+    for word in text.split():
+        if len(word) < _TYPO_MIN_LEN:
+            out.append(word)
+            continue
+        matches = difflib.get_close_matches(
+            word.lower(), ATTACK_KEYWORDS, n=1, cutoff=_TYPO_CUTOFF
+        )
+        out.append(matches[0] if matches else word)
+    return " ".join(out)
 
 
 def _normalise(content: str) -> str:
@@ -184,12 +199,9 @@ def _scan_text(text: str) -> GuardResult | None:
     """Run every detector against one piece of text.
 
     Returns a blocking GuardResult on the first hit, or None when the text is
-    clean. Typo correction is applied up front so misspelled attack keywords
-    ("ignroe all previous instructions") still match the English patterns.
-    The caller runs this on both the translated copy and the original input.
+    clean. The caller is responsible for any pre-processing (translation,
+    NFKC, typo normalisation) and runs this on each candidate variant.
     """
-    text = _correct_typos(text)
-
     for pattern, reason, severity, desc in PATTERNS:
         match = pattern.search(text)
         if match:
@@ -211,6 +223,7 @@ def _scan_text(text: str) -> GuardResult | None:
 class InputGuard(Guard):
     async def scan(self, content: str) -> GuardResult:
         normalised = _normalise(content)
+        typo_normalised = normalize_typos(normalised)
 
         # Translate non-English input to English so the deterministic patterns
         # below can match it. The translated copy is used for matching only;
@@ -229,14 +242,26 @@ class InputGuard(Guard):
             detected_lang = None
             translation_timed_out = True
 
-        # Scan the translated copy *and* the original: translation can fail
-        # open, be skipped on low detection confidence, or drop a pattern in
-        # the process, yet the original may still carry a detectable payload.
-        # Either hit blocks the request.
+        # Scan up to four variants: the translated copy (covers non-English
+        # payloads), the homoglyph-folded original (covers Latin attacks
+        # regardless of translation), and the typo-normalised forms of both
+        # (covers misspelled attacks — including ones where translation passes
+        # the typo through verbatim, e.g. "ignroe" surviving fr->en). Any hit
+        # blocks. Dedup so well-spelled English inputs collapse to one pass.
         suffix = _translation_suffix(detected_lang, translation_timed_out)
-        candidates = [english_content]
-        if normalised != english_content:
-            candidates.append(normalised)
+        typo_normalised_english = normalize_typos(english_content)
+        seen: set[str] = set()
+        candidates: list[str] = []
+        for candidate in (
+            english_content,
+            normalised,
+            typo_normalised,
+            typo_normalised_english,
+        ):
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            candidates.append(candidate)
         for candidate in candidates:
             hit = _scan_text(candidate)
             if hit is not None:
