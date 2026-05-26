@@ -111,6 +111,115 @@ PATTERNS: list[tuple[re.Pattern[str], ReasonCode, Severity, str]] = [
     ),
 ]
 
+# Multilingual patterns adapted from prompt-armor/prompt-armor
+# (Apache 2.0) — https://github.com/prompt-armor/prompt-armor
+# Rule IDs: ML-DE-001, ML-DE-003, ML-DE-004,
+#           ML-ES-001, ML-ES-003,
+#           ML-FR-001, ML-FR-003 (extended to also catch the formal
+#                                "vous êtes" alongside informal "tu es"),
+#           ML-PT-001 (third group made required to avoid the
+#                     "ignore a/as ..." English false-positive).
+#
+# These run against the homoglyph-folded original text as a parallel
+# detection path to the translation-based scanning. They catch non-English
+# attacks without depending on argostranslate succeeding.
+MULTILINGUAL_PATTERNS: list[tuple[re.Pattern[str], ReasonCode, Severity, str, str]] = [
+    # German
+    (
+        re.compile(
+            r"(vergiss|ignorier[e]?|missacht[e]?|höre?\s+nicht\s+auf)\s+"
+            r"(alles?|alle[ns]?|sämtliche)\s*"
+            r"(bisherige[n]?|vorherige[n]?|obige[n]?|davor|zuvor\s+gesagte)?",
+            _FLAGS,
+        ),
+        ReasonCode.OVERRIDE_ATTEMPT,
+        Severity.CRITICAL,
+        "de",
+        "forget-previous-instructions",
+    ),
+    (
+        re.compile(
+            r"du\s+bist\s+(jetzt|nun|ab\s+sofort)\s+(ein[e]?|der|die|das)",
+            _FLAGS,
+        ),
+        ReasonCode.PERSONA_SWITCH,
+        Severity.HIGH,
+        "de",
+        "you-are-now-persona",
+    ),
+    (
+        re.compile(
+            r"(zeig|gib|nenn|drucke?)\s+(mir\s+)?(den|die|das|deinen?)\s*"
+            r"(System.?prompt|Anweisungen|Instruktionen)",
+            _FLAGS,
+        ),
+        ReasonCode.SYSTEM_PROBE,
+        Severity.MEDIUM,
+        "de",
+        "show-system-prompt",
+    ),
+    # Spanish
+    (
+        re.compile(
+            r"(olvida|ignora|desecha|descarta)\s+"
+            r"(todo|todas?|los?|las?)\s*"
+            r"(anterior|previo|instrucciones?)?",
+            _FLAGS,
+        ),
+        ReasonCode.OVERRIDE_ATTEMPT,
+        Severity.CRITICAL,
+        "es",
+        "forget-previous-instructions",
+    ),
+    (
+        re.compile(r"ahora\s+eres\s+(un[a]?|el|la|mi)", _FLAGS),
+        ReasonCode.PERSONA_SWITCH,
+        Severity.HIGH,
+        "es",
+        "you-are-now-persona",
+    ),
+    # French
+    (
+        re.compile(
+            r"(oublie[zs]?|ignore[zs]?|ne\s+tien[s]?\s+pas\s+compte)\s+"
+            r"(de\s+)?(tout|toutes?|les?)\s*"
+            r"(instructions?|consignes?|précédent)?",
+            _FLAGS,
+        ),
+        ReasonCode.OVERRIDE_ATTEMPT,
+        Severity.CRITICAL,
+        "fr",
+        "forget-previous-instructions",
+    ),
+    (
+        re.compile(
+            r"(tu\s+es|vous\s+êtes)\s+(maintenant|désormais)\s+(un[e]?|le|la)",
+            _FLAGS,
+        ),
+        ReasonCode.PERSONA_SWITCH,
+        Severity.HIGH,
+        "fr",
+        "you-are-now-persona",
+    ),
+    # Portuguese — modified from prompt-armor in two ways: third group is
+    # required (not optional) so the EN/PT homograph "ignore" cannot fire on
+    # bare "ignore a request"; and a second article slot is allowed so the
+    # natural "todas as instruções" article-noun chain matches end-to-end.
+    (
+        re.compile(
+            r"(esqueça|ignore|descarte|desconsidere)\s+"
+            r"(tudo|todas?|os?|as?)"
+            r"(?:\s+(?:as?|os?))?\s+"
+            r"(anterior|prévi[oa]|instruções?)",
+            _FLAGS,
+        ),
+        ReasonCode.OVERRIDE_ATTEMPT,
+        Severity.CRITICAL,
+        "pt",
+        "forget-previous-instructions",
+    ),
+]
+
 # Cyrillic homoglyphs that NFKC does not fold to Latin. Applied after NFKC so
 # regex matching sees the Latin form. Coverage is deliberately narrow — common
 # letters reused in jailbreak payloads.
@@ -220,9 +329,34 @@ def _scan_text(text: str) -> GuardResult | None:
     return _scan_density(text)
 
 
+def _scan_multilingual(text: str) -> GuardResult | None:
+    """Scan for non-English injection patterns against the original text.
+
+    Runs as a parallel detection path to translation: even when argostranslate
+    fails, times out, or strips the attacker's verb, these patterns still fire
+    on the raw German/Spanish/French/Portuguese input.
+    """
+    for pattern, reason, severity, lang, desc in MULTILINGUAL_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            return GuardResult(
+                passed=False,
+                reason_code=reason,
+                severity=severity,
+                detail=f"Multilingual pattern ({lang}): {desc}",
+                matched_pattern=f"multilingual-{lang}-{desc}",
+            )
+    return None
+
+
 class InputGuard(Guard):
     async def scan(self, content: str) -> GuardResult:
         normalised = _normalise(content)
+
+        ml_hit = _scan_multilingual(normalised)
+        if ml_hit is not None:
+            return ml_hit
+
         typo_normalised = normalize_typos(normalised)
 
         # Translate non-English input to English so the deterministic patterns
