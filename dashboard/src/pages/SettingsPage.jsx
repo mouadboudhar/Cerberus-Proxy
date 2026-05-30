@@ -130,7 +130,7 @@ export default function SettingsPage() {
               <span className="lbl">Webhook URL</span>
               <input
                 className="lg-input"
-                placeholder="https://hooks.your-org.com/llmguard"
+                placeholder="https://hooks.your-org.com/cerberus_proxy"
                 disabled
               />
             </div>

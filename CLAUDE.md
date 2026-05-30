@@ -1,16 +1,16 @@
-# LLMGuard — Project Rules for Claude Code
+# Cerberus Proxy — Project Rules for Claude Code
 
 ## Product
-LLMGuard is a self-hosted reverse proxy security gateway
+Cerberus Proxy is a self-hosted reverse proxy security gateway
 for LLM applications. It sits between customer AI apps
 and LLM providers, applying deterministic security guards.
 
 ## Architecture
-- llmguard/proxy/    FastAPI reverse proxy (the product)
-- llmguard/guards/   Input, Output, Retrieval AuthZ guards
-- llmguard/adapters/ OpenAI, Anthropic, Ollama, Mistral
-- llmguard/auth/     API key validation
-- llmguard/audit/    Event log + WebSocket broadcast
+- cerberus_proxy/proxy/    FastAPI reverse proxy (the product)
+- cerberus_proxy/guards/   Input, Output, Retrieval AuthZ guards
+- cerberus_proxy/adapters/ OpenAI, Anthropic, Ollama, Mistral
+- cerberus_proxy/auth/     API key validation
+- cerberus_proxy/audit/    Event log + WebSocket broadcast
 - dashboard/         React + Vite admin dashboard
 
 ## Rules

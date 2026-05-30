@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install bandit
-      - run: bandit -r llmguard/ -ll
+      - run: bandit -r cerberus_proxy/ -ll
 
   pytest:
     name: Tests (pytest)
@@ -53,7 +53,7 @@ jobs:
           else:
               print('fr->en model not found')
           "
-      - run: pytest llmguard/tests/ -v
+      - run: pytest cerberus_proxy/tests/ -v
 
   npm-build:
     name: Dashboard build (npm)

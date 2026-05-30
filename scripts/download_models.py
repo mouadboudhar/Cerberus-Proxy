@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Download argostranslate language models for LLMGuard.
+"""Download argostranslate language models for Cerberus Proxy.
 
 Run once after installation:
 
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from lingua import Language
 
-from llmguard.guards.translator import (
+from cerberus_proxy.guards.translator import (
     SUPPORTED_LANGUAGES,
     ensure_language_models_installed,
 )

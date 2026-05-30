@@ -1,8 +1,8 @@
-# LLMGuard
+# Cerberus Proxy
 
 Self-hosted security gateway for LLM applications.
 
-LLMGuard sits between your AI application and any LLM 
+Cerberus Proxy sits between your AI application and any LLM 
 provider. It applies three deterministic security guards 
 to every request, gives you full visibility through a 
 dashboard, and runs entirely inside your own infrastructure.
@@ -36,7 +36,7 @@ after the initial download.
 
 One URL change in your application:
 
-base_url = "http://your-llmguard/v1"
+base_url = "http://your-cerberus_proxy/v1"
 
 ## Status
 

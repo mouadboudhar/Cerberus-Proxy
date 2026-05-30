@@ -42,7 +42,7 @@ export default function Sidebar() {
             className="font-semibold text-md truncate"
             style={{ letterSpacing: '-0.01em', color: 'var(--text)' }}
           >
-            LLM Guard
+            Cerberus Proxy
           </span>
         </div>
         <span

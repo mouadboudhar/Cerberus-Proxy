@@ -54,7 +54,7 @@ export default function LoginPage() {
               className="font-semibold"
               style={{ fontSize: '17px', letterSpacing: '-0.01em', color: 'var(--text)' }}
             >
-              LLM Guard
+              Cerberus Proxy
             </div>
             <div className="mt-1 text-[11.5px]" style={{ color: 'var(--text-3)' }}>
               Enterprise Security Gateway
@@ -107,7 +107,7 @@ export default function LoginPage() {
           </button>
 
           <div className="text-center text-[11px]" style={{ color: 'var(--text-4)' }}>
-            Set via <code className="font-mono">LLMGUARD_DASHBOARD_TOKEN</code>
+            Set via <code className="font-mono">CERBERUS_DASHBOARD_TOKEN</code>
           </div>
         </form>
       </div>

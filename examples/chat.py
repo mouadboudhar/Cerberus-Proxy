@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Minimal REPL chat client for manually exercising the LLMGuard proxy.
+"""Minimal REPL chat client for manually exercising the Cerberus Proxy proxy.
 
 Usage:
-    python examples/chat.py <llmguard_key> <provider_api_key>
+    python examples/chat.py <cerberus_proxy_key> <provider_api_key>
 
 Env overrides:
-    LLMGUARD_URL    base URL of the proxy (default: http://localhost:8000)
-    LLMGUARD_MODEL  model name sent in the request (default: gpt-4o-mini)
+    CERBERUS_URL    base URL of the proxy (default: http://localhost:8000)
+    CERBERUS_MODEL  model name sent in the request (default: gpt-4o-mini)
 
 Commands inside the REPL:
     /reset    clear conversation history
@@ -37,21 +37,21 @@ def main() -> int:
     if len(sys.argv) != 3:
         _usage_and_exit()
 
-    llmguard_key = sys.argv[1]
+    cerberus_proxy_key = sys.argv[1]
     provider_key = sys.argv[2]
-    base_url = os.environ.get("LLMGUARD_URL", "http://localhost:8000").rstrip("/")
-    model = os.environ.get("LLMGUARD_MODEL", "gpt-4o-mini")
+    base_url = os.environ.get("CERBERUS_URL", "http://localhost:8000").rstrip("/")
+    model = os.environ.get("CERBERUS_MODEL", "gpt-4o-mini")
     url = f"{base_url}/v1/chat/completions"
 
     headers = {
-        "X-LLMGuard-Key": llmguard_key,
+        "X-Cerberus-Key": cerberus_proxy_key,
         "Authorization": f"Bearer {provider_key}",
         "Content-Type": "application/json",
     }
 
     history: list[dict[str, str]] = []
     
-    console.rule("[bold blue]LLMGuard Chat[/bold blue]")
+    console.rule("[bold blue]Cerberus Proxy Chat[/bold blue]")
     console.print(f"[dim]URL:[/dim] [cyan]{url}[/cyan] [dim]Model:[/dim] [green]{model}[/green]")
     console.print("Commands: [bold]/reset[/bold], [bold]/history[/bold], [bold]/quit[/bold]\n")
 

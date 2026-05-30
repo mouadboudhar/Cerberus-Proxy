@@ -167,7 +167,7 @@ function AddModal({ onClose, onCreate }) {
           <div>
             <h3 className="m-0 font-semibold" style={{ fontSize: '15px', color: 'var(--text)' }}>Add Endpoint</h3>
             <p className="m-0 mt-0.5 text-sm" style={{ color: 'var(--text-3)' }}>
-              Proxy a new LLM provider through LLM Guard. You can change everything later.
+              Proxy a new LLM provider through Cerberus Proxy. You can change everything later.
             </p>
           </div>
           <button

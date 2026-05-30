@@ -1,22 +1,22 @@
 services:
   proxy:
     build: .
-    container_name: llmguard-proxy
+    container_name: cerberus-proxy
     ports:
       - "8000:8000"
     volumes:
-      - llmguard-data:/app/data
+      - cerberus-data:/app/data
     environment:
-      - LLMGUARD_DB_PATH=/app/data/llmguard.db
-      - LLMGUARD_UPSTREAM_URL=${LLMGUARD_UPSTREAM_URL:-https://api.openai.com}
-      - LLMGUARD_PROVIDER=${LLMGUARD_PROVIDER:-openai}
-      - LLMGUARD_DEFAULT_RPM=${LLMGUARD_DEFAULT_RPM:-60}
-      - LLMGUARD_DEFAULT_RPH=${LLMGUARD_DEFAULT_RPH:-1000}
-      - LLMGUARD_DEFAULT_RPD=${LLMGUARD_DEFAULT_RPD:-10000}
-      - LLMGUARD_OUTPUT_GUARD_ACTION=${LLMGUARD_OUTPUT_GUARD_ACTION:-redact}
-      - LLMGUARD_DASHBOARD_TOKEN=${LLMGUARD_DASHBOARD_TOKEN:-change-me}
-      - LLMGUARD_TRANSLATE_TIMEOUT=${LLMGUARD_TRANSLATE_TIMEOUT:-1.0}
-      - LLMGUARD_DEFAULT_CLEARANCE=${LLMGUARD_DEFAULT_CLEARANCE:-INTERNAL}
+      - CERBERUS_DB_PATH=/app/data/cerberus.db
+      - CERBERUS_UPSTREAM_URL=${CERBERUS_UPSTREAM_URL:-https://api.openai.com}
+      - CERBERUS_PROVIDER=${CERBERUS_PROVIDER:-openai}
+      - CERBERUS_DEFAULT_RPM=${CERBERUS_DEFAULT_RPM:-60}
+      - CERBERUS_DEFAULT_RPH=${CERBERUS_DEFAULT_RPH:-1000}
+      - CERBERUS_DEFAULT_RPD=${CERBERUS_DEFAULT_RPD:-10000}
+      - CERBERUS_OUTPUT_GUARD_ACTION=${CERBERUS_OUTPUT_GUARD_ACTION:-redact}
+      - CERBERUS_DASHBOARD_TOKEN=${CERBERUS_DASHBOARD_TOKEN:-change-me}
+      - CERBERUS_TRANSLATE_TIMEOUT=${CERBERUS_TRANSLATE_TIMEOUT:-1.0}
+      - CERBERUS_DEFAULT_CLEARANCE=${CERBERUS_DEFAULT_CLEARANCE:-INTERNAL}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -29,7 +29,7 @@ services:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
-    container_name: llmguard-dashboard
+    container_name: cerberus-dashboard
     ports:
       - "5173:80"
     depends_on:
@@ -38,5 +38,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  llmguard-data:
+  cerberus-data:
     driver: local

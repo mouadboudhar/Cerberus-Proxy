@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "llmguard"
+name = "cerberus-proxy"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
@@ -20,12 +20,12 @@ dependencies = [
 ]
 
 [project.scripts]
-llmguard = "llmguard.proxy.main:start"
-llmguard-admin = "llmguard.cli.admin:app"
+cerberus-proxy = "cerberus_proxy.proxy.main:start"
+cerberus-admin = "cerberus_proxy.cli.admin:app"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["llmguard*"]
+include = ["cerberus_proxy*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
