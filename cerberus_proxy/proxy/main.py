@@ -25,6 +25,7 @@ from cerberus_proxy.audit.repository import SQLiteAuditRepository
 from cerberus_proxy.audit.request_context import RequestContextMiddleware
 from cerberus_proxy.audit.ws import router as ws_router
 from cerberus_proxy.auth.middleware import ApiKeyAuthMiddleware
+from cerberus_proxy.config.models import Endpoint
 from cerberus_proxy.config.repository import SQLiteEndpointRepository
 from cerberus_proxy.db import init_db
 from cerberus_proxy.guards.input_guard import InputGuard
@@ -32,6 +33,8 @@ from cerberus_proxy.guards.output_guard import OutputGuard
 from cerberus_proxy.guards.translator import warm_up
 from cerberus_proxy.ratelimit.abuse import AbuseDetector
 from cerberus_proxy.ratelimit.middleware import check_rate_limits
+from cerberus_proxy.retrieval.factory import get_retriever
+from cerberus_proxy.retrieval.injector import inject_context
 
 logger = logging.getLogger("cerberus_proxy.proxy")
 
@@ -105,6 +108,7 @@ async def _forward(
     upstream_url: str,
     request: Request,
     endpoint_id: int | None = None,
+    endpoint: Endpoint | None = None,
 ) -> JSONResponse:
     body = await request.json()
     request_id = getattr(request.state, "request_id", None)
@@ -171,6 +175,24 @@ async def _forward(
         endpoint_id=endpoint_id,
         request_id=request_id,
     )
+
+    # Knowledge-base retrieval: only endpoints with a configured KB trigger
+    # this. The default route passes endpoint=None and is skipped. A failing
+    # KB must never break the request — forward without injected context.
+    if endpoint is not None and endpoint.has_knowledge_base:
+        retriever = get_retriever(
+            endpoint.kb_type, endpoint.kb_url, endpoint.kb_collection
+        )
+        if retriever:
+            try:
+                docs = await retriever.retrieve(
+                    user_content, endpoint.kb_top_k or 4
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.warning("Retrieval failed: %s", e)
+                docs = []
+            if docs:
+                body["messages"] = inject_context(body["messages"], docs)
 
     headers = dict(request.headers)
     adapter = get_adapter(provider, AdapterConfig(upstream_url=upstream_url))
@@ -326,7 +348,11 @@ async def chat_completions_endpoint(endpoint_id: int, request: Request):
     if endpoint is None:
         raise HTTPException(status_code=404, detail="Endpoint not found")
     return await _forward(
-        endpoint.provider, endpoint.upstream_url, request, endpoint_id=endpoint_id
+        endpoint.provider,
+        endpoint.upstream_url,
+        request,
+        endpoint_id=endpoint_id,
+        endpoint=endpoint,
     )
 
 

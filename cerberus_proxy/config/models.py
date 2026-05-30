@@ -22,3 +22,7 @@ class Endpoint(Base):
     kb_top_k: Mapped[int] = mapped_column(
         Integer, default=4, server_default="4", nullable=False
     )
+
+    @property
+    def has_knowledge_base(self) -> bool:
+        return bool(self.kb_type and self.kb_url)

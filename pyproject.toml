@@ -17,6 +17,7 @@ dependencies = [
     "rich>=13.0.0",
     "lingua-language-detector>=2.0.0",
     "argostranslate>=1.9.0",
+    "chromadb>=0.4.0",
 ]
 
 [project.scripts]
