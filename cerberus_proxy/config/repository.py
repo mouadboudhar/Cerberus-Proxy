@@ -43,6 +43,9 @@ _UPDATABLE_FIELDS = {
     "kb_url",
     "kb_collection",
     "kb_top_k",
+    "disabled_input_rules",
+    "custom_blocked_phrases",
+    "active_languages",
 }
 
 

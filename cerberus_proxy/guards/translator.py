@@ -90,7 +90,9 @@ def _cached_translate(text: str, from_code: str) -> str:
     return translated
 
 
-async def to_english(text: str) -> tuple[str, str | None]:
+async def to_english(
+    text: str, active_languages: list[str] | None = None
+) -> tuple[str, str | None]:
     """Return ``text`` as English plus the detected source language code.
 
     The second element is the ISO 639-1 code the text was translated from, or
@@ -101,6 +103,11 @@ async def to_english(text: str) -> tuple[str, str | None]:
     mixed-language prompts routinely misdetect as English. The translation
     runs in a worker thread so the event loop stays responsive and an
     ``asyncio.wait_for`` timeout around this coroutine can actually fire.
+
+    ``active_languages`` (Stage 14b, per-endpoint): when a non-empty list of
+    ISO 639-1 codes is given, only those source languages are translated;
+    input detected as any other language is left untranslated and its
+    patterns are matched on the original text.
     """
     confidences = _detector.compute_language_confidence_values(text)
     if not confidences:
@@ -137,6 +144,16 @@ async def to_english(text: str) -> tuple[str, str | None]:
             return (text, None)
 
     from_code = detected.iso_code_639_1.name.lower()
+
+    # Endpoint-scoped language allowlist: skip translation for inactive
+    # languages and match patterns against the original text instead.
+    if active_languages and from_code not in active_languages:
+        logger.warning(
+            "Language %s not in active set %s; skipping translation",
+            from_code,
+            active_languages,
+        )
+        return (text, None)
 
     translated = await asyncio.to_thread(_cached_translate, text, from_code)
     if not translated or translated == text:

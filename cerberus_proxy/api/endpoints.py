@@ -4,6 +4,7 @@ All routes require the dashboard token via the X-Dashboard-Token header,
 enforced by the shared verify_dashboard_token dependency.
 """
 
+import json
 from enum import Enum
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -52,6 +53,9 @@ class EndpointUpdate(BaseModel):
     kb_collection: str | None = None
     kb_top_k: int | None = None
     is_active: bool | None = None
+    disabled_input_rules: list[str] | None = None
+    custom_blocked_phrases: list[str] | None = None
+    active_languages: list[str] | None = None
 
 
 _EMPTY_STATS = {
@@ -80,6 +84,9 @@ def _serialize(endpoint: Endpoint, stats: dict) -> dict:
         "kb_url": endpoint.kb_url,
         "kb_collection": endpoint.kb_collection,
         "kb_top_k": endpoint.kb_top_k,
+        "disabled_input_rules": endpoint.get_disabled_input_rules,
+        "custom_blocked_phrases": endpoint.get_custom_blocked_phrases,
+        "active_languages": endpoint.get_active_languages,
         "created_at": endpoint.created_at.isoformat() if endpoint.created_at else None,
         "stats": stats,
     }
@@ -130,6 +137,10 @@ async def get_endpoint(endpoint_id: int) -> dict:
 async def update_endpoint(endpoint_id: int, body: EndpointUpdate) -> dict:
     # mode="json" coerces the Provider enum to its string value.
     fields = body.model_dump(exclude_unset=True, mode="json")
+    # Guard-config lists are stored as JSON text; serialize before persisting.
+    for col in ("disabled_input_rules", "custom_blocked_phrases", "active_languages"):
+        if col in fields:
+            fields[col] = json.dumps(fields[col]) if fields[col] is not None else None
     async with db.AsyncSessionLocal() as session:
         repo = SQLiteEndpointRepository(session)
         endpoint = await repo.update(endpoint_id, **fields)

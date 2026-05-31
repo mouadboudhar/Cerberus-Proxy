@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 
@@ -29,6 +29,27 @@ class GuardResult:
     severity: Severity
     detail: str
     matched_pattern: str | None = None
+
+
+@dataclass
+class GuardConfig:
+    """Per-endpoint guard tuning. Empty lists mean default behaviour.
+
+    ``disabled_rules`` holds rule identifiers for both guards: Input Guard
+    ReasonCode names (e.g. "SYSTEM_PROBE", "MULTILINGUAL") and Output Guard
+    pattern names (e.g. "PHONE_US"). The two name spaces don't overlap, so a
+    single list drives both.
+    """
+
+    disabled_rules: list[str] = field(default_factory=list)
+    custom_blocked_phrases: list[str] = field(default_factory=list)
+    active_languages: list[str] = field(default_factory=list)
+
+
+# Shared sentinel for "no customisation" — produces identical behaviour to the
+# pre-Stage-14b guards. Never mutated by the guards, so sharing one instance is
+# safe.
+DEFAULT_GUARD_CONFIG = GuardConfig()
 
 
 class Guard(ABC):

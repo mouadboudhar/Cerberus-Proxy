@@ -11,7 +11,14 @@ import re
 from collections import Counter
 from typing import NamedTuple
 
-from cerberus_proxy.guards.base import Guard, GuardResult, ReasonCode, Severity
+from cerberus_proxy.guards.base import (
+    DEFAULT_GUARD_CONFIG,
+    Guard,
+    GuardConfig,
+    GuardResult,
+    ReasonCode,
+    Severity,
+)
 
 
 class PatternDef(NamedTuple):
@@ -405,8 +412,10 @@ def _dedup_overlaps(matches: list[dict]) -> list[dict]:
 class OutputGuard(Guard):
     """Stateless deterministic guard for upstream LLM responses."""
 
-    async def scan(self, content: str) -> GuardResult:
-        matches = self.find_all_matches(content)
+    async def scan(
+        self, content: str, config: GuardConfig = DEFAULT_GUARD_CONFIG
+    ) -> GuardResult:
+        matches = self.find_all_matches(content, config)
         if not matches:
             return GuardResult(
                 passed=True,
@@ -423,9 +432,14 @@ class OutputGuard(Guard):
             matched_pattern=first["name"],
         )
 
-    def find_all_matches(self, content: str) -> list[dict]:
+    def find_all_matches(
+        self, content: str, config: GuardConfig = DEFAULT_GUARD_CONFIG
+    ) -> list[dict]:
         matches: list[dict] = []
         for pdef in PATTERNS:
+            # Skip patterns the endpoint has disabled (keyed by pattern name).
+            if pdef.name in config.disabled_rules:
+                continue
             for m in pdef.regex.finditer(content):
                 text = m.group(0)
                 if pdef.name in LUHN_REQUIRED and not luhn_check(text):
@@ -448,11 +462,14 @@ class OutputGuard(Guard):
                     "severity": pdef.severity,
                     "detail": detail,
                 })
-        matches.extend(_find_high_entropy(content))
+        if HIGH_ENTROPY_NAME not in config.disabled_rules:
+            matches.extend(_find_high_entropy(content))
         return _dedup_overlaps(matches)
 
-    def redact(self, content: str) -> tuple[str, list[str]]:
-        matches = self.find_all_matches(content)
+    def redact(
+        self, content: str, config: GuardConfig = DEFAULT_GUARD_CONFIG
+    ) -> tuple[str, list[str]]:
+        matches = self.find_all_matches(content, config)
         for m in sorted(matches, key=lambda x: x["start"], reverse=True):
             content = content[: m["start"]] + f"[REDACTED:{m['name']}]" + content[m["end"]:]
         names = sorted({m["name"] for m in matches})

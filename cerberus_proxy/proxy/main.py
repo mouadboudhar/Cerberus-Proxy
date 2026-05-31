@@ -27,6 +27,7 @@ from cerberus_proxy.audit.ws import router as ws_router
 from cerberus_proxy.auth.middleware import ApiKeyAuthMiddleware
 from cerberus_proxy.config.models import Endpoint
 from cerberus_proxy.config.repository import SQLiteEndpointRepository
+from cerberus_proxy.guards.base import DEFAULT_GUARD_CONFIG, GuardConfig
 from cerberus_proxy.db import init_db
 from cerberus_proxy.guards.input_guard import InputGuard
 from cerberus_proxy.guards.output_guard import OutputGuard
@@ -140,12 +141,23 @@ async def _forward(
                 request_id=request_id,
             )
 
+    # Per-endpoint guard config (Stage 14b). The default route (no endpoint)
+    # uses the all-rules-on default, preserving prior behaviour.
+    if endpoint is not None:
+        guard_config = GuardConfig(
+            disabled_rules=endpoint.get_disabled_input_rules,
+            custom_blocked_phrases=endpoint.get_custom_blocked_phrases,
+            active_languages=endpoint.get_active_languages,
+        )
+    else:
+        guard_config = DEFAULT_GUARD_CONFIG
+
     user_content = " ".join(
         m["content"]
         for m in body.get("messages", [])
         if m.get("role") == "user" and isinstance(m.get("content"), str)
     )
-    guard_result = await _input_guard.scan(user_content)
+    guard_result = await _input_guard.scan(user_content, guard_config)
     if not guard_result.passed:
         await emit(
             EventType.INPUT_GUARD_BLOCKED,
@@ -229,7 +241,11 @@ async def _forward(
         request_id=request_id,
     )
     return await _apply_output_guard(
-        result, key_id=key_id, endpoint_id=endpoint_id, request_id=request_id
+        result,
+        key_id=key_id,
+        endpoint_id=endpoint_id,
+        request_id=request_id,
+        config=guard_config,
     )
 
 
@@ -246,6 +262,7 @@ async def _apply_output_guard(
     key_id: int | None = None,
     endpoint_id: int | None = None,
     request_id: str | None = None,
+    config: GuardConfig = DEFAULT_GUARD_CONFIG,
 ) -> JSONResponse:
     action = os.getenv("CERBERUS_OUTPUT_GUARD_ACTION", "redact").lower()
     content = _extract_assistant_content(result)
@@ -259,7 +276,7 @@ async def _apply_output_guard(
         return JSONResponse(content=result)
 
     if action == "block":
-        scan = await _output_guard.scan(content)
+        scan = await _output_guard.scan(content, config)
         if not scan.passed:
             await emit(
                 EventType.OUTPUT_GUARD_BLOCKED,
@@ -292,7 +309,7 @@ async def _apply_output_guard(
         return JSONResponse(content=result)
 
     if action == "log_only":
-        scan = await _output_guard.scan(content)
+        scan = await _output_guard.scan(content, config)
         if not scan.passed:
             logger.warning(
                 "output_guard log_only — would block: %s/%s — %s",
@@ -309,7 +326,7 @@ async def _apply_output_guard(
         return JSONResponse(content=result)
 
     # default action: redact
-    redacted, names = _output_guard.redact(content)
+    redacted, names = _output_guard.redact(content, config)
     if names:
         result["choices"][0]["message"]["content"] = redacted
         await emit(

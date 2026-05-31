@@ -37,6 +37,7 @@ async def init_db() -> None:
         await _migrate_api_keys_rate_limits(conn)
         await _migrate_api_keys_endpoint_id(conn)
         await _migrate_endpoint_kb_columns(conn)
+        await _migrate_endpoint_guard_columns(conn)
 
 
 async def _migrate_api_keys_rate_limits(conn) -> None:
@@ -70,6 +71,19 @@ async def _migrate_endpoint_kb_columns(conn) -> None:
     for col, ddl in coldefs.items():
         if col not in existing:
             await conn.execute(text(f"ALTER TABLE endpoints ADD COLUMN {col} {ddl}"))
+
+
+async def _migrate_endpoint_guard_columns(conn) -> None:
+    # Stage 14b: per-endpoint guard config columns (JSON arrays as TEXT).
+    result = await conn.execute(text("PRAGMA table_info(endpoints)"))
+    existing = {row[1] for row in result.fetchall()}
+    for col in (
+        "disabled_input_rules",
+        "custom_blocked_phrases",
+        "active_languages",
+    ):
+        if col not in existing:
+            await conn.execute(text(f"ALTER TABLE endpoints ADD COLUMN {col} TEXT"))
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

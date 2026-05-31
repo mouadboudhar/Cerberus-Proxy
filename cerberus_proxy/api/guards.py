@@ -17,6 +17,9 @@ from pydantic import BaseModel
 
 from cerberus_proxy.api.auth import _env_file_path, _update_env_file
 from cerberus_proxy.audit.api import verify_dashboard_token
+from cerberus_proxy.guards.input_guard import PATTERNS as _INPUT_PATTERNS
+from cerberus_proxy.guards.output_guard import HIGH_ENTROPY_NAME
+from cerberus_proxy.guards.output_guard import PATTERNS as _OUTPUT_PATTERNS
 from cerberus_proxy.guards.translator import SUPPORTED_LANGUAGES
 
 router = APIRouter(
@@ -66,6 +69,30 @@ def _bool_env(name: str, default: bool = True) -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+def _input_available_rules() -> list[str]:
+    # Derived from the Input Guard's ReasonCode categories, plus the two
+    # heuristic toggles that aren't part of the regex PATTERNS table.
+    rules: list[str] = []
+    for _pattern, reason, _severity, _desc in _INPUT_PATTERNS:
+        if reason.name not in rules:
+            rules.append(reason.name)
+    for extra in ("HIGH_DENSITY", "MULTILINGUAL"):
+        if extra not in rules:
+            rules.append(extra)
+    return rules
+
+
+def _output_available_rules() -> list[str]:
+    # Every Output Guard pattern name, plus the high-entropy catch-all.
+    rules: list[str] = []
+    for pdef in _OUTPUT_PATTERNS:
+        if pdef.name not in rules:
+            rules.append(pdef.name)
+    if HIGH_ENTROPY_NAME not in rules:
+        rules.append(HIGH_ENTROPY_NAME)
+    return rules
+
+
 def _supported_languages() -> list[str]:
     # Single source of truth: derive ISO-639-1 codes from the translator's list.
     codes = []
@@ -82,10 +109,12 @@ def _current_config() -> dict:
         "input_guard": {
             "enabled": _bool_env(_INPUT_ENABLED, True),
             "output_action": os.getenv(_INPUT_ACTION, "block"),
+            "available_rules": _input_available_rules(),
         },
         "output_guard": {
             "enabled": _bool_env(_OUTPUT_ENABLED, True),
             "action": os.getenv(_OUTPUT_ACTION, "redact").lower(),
+            "available_rules": _output_available_rules(),
         },
         "translation": {
             "enabled": _bool_env(_TRANSLATION_ENABLED, True),

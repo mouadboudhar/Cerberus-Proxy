@@ -6,7 +6,14 @@ import os
 import re
 import unicodedata
 
-from cerberus_proxy.guards.base import Guard, GuardResult, ReasonCode, Severity
+from cerberus_proxy.guards.base import (
+    DEFAULT_GUARD_CONFIG,
+    Guard,
+    GuardConfig,
+    GuardResult,
+    ReasonCode,
+    Severity,
+)
 from cerberus_proxy.guards.translator import to_english
 
 _FLAGS = re.IGNORECASE | re.MULTILINE
@@ -304,14 +311,23 @@ def _translation_suffix(detected_lang: str | None, timed_out: bool) -> str:
     return suffix
 
 
-def _scan_text(text: str) -> GuardResult | None:
-    """Run every detector against one piece of text.
+def _scan_text(
+    text: str, config: GuardConfig = DEFAULT_GUARD_CONFIG
+) -> GuardResult | None:
+    """Run every (enabled) detector against one piece of text.
 
     Returns a blocking GuardResult on the first hit, or None when the text is
     clean. The caller is responsible for any pre-processing (translation,
     NFKC, typo normalisation) and runs this on each candidate variant.
+
+    Rules are keyed by ReasonCode name: any pattern whose category is in
+    ``config.disabled_rules`` is skipped silently, as are the base64
+    (ENCODED_PAYLOAD) and instruction-density (HIGH_DENSITY) heuristics.
     """
+    disabled = config.disabled_rules
     for pattern, reason, severity, desc in PATTERNS:
+        if reason.name in disabled:
+            continue
         match = pattern.search(text)
         if match:
             return GuardResult(
@@ -322,11 +338,15 @@ def _scan_text(text: str) -> GuardResult | None:
                 matched_pattern=match.group(0),
             )
 
-    decoded_hit = _scan_base64_payloads(text)
-    if decoded_hit is not None:
-        return decoded_hit
+    if ReasonCode.ENCODED_PAYLOAD.name not in disabled:
+        decoded_hit = _scan_base64_payloads(text)
+        if decoded_hit is not None:
+            return decoded_hit
 
-    return _scan_density(text)
+    if ReasonCode.HIGH_DENSITY.name not in disabled:
+        return _scan_density(text)
+
+    return None
 
 
 def _scan_multilingual(text: str) -> GuardResult | None:
@@ -350,12 +370,29 @@ def _scan_multilingual(text: str) -> GuardResult | None:
 
 
 class InputGuard(Guard):
-    async def scan(self, content: str) -> GuardResult:
+    async def scan(
+        self, content: str, config: GuardConfig = DEFAULT_GUARD_CONFIG
+    ) -> GuardResult:
+        # Custom blocked phrases run first, before any normalisation or pattern
+        # matching: an exact (case-insensitive) substring match blocks outright.
+        if config.custom_blocked_phrases:
+            lowered = content.lower()
+            for phrase in config.custom_blocked_phrases:
+                if phrase.lower() in lowered:
+                    return GuardResult(
+                        passed=False,
+                        reason_code=ReasonCode.OVERRIDE_ATTEMPT,
+                        severity=Severity.HIGH,
+                        detail="Custom blocked phrase detected",
+                        matched_pattern="custom-phrase",
+                    )
+
         normalised = _normalise(content)
 
-        ml_hit = _scan_multilingual(normalised)
-        if ml_hit is not None:
-            return ml_hit
+        if "MULTILINGUAL" not in config.disabled_rules:
+            ml_hit = _scan_multilingual(normalised)
+            if ml_hit is not None:
+                return ml_hit
 
         typo_normalised = normalize_typos(normalised)
 
@@ -367,9 +404,16 @@ class InputGuard(Guard):
             os.environ.get("CERBERUS_TRANSLATE_TIMEOUT", _DEFAULT_TRANSLATE_TIMEOUT)
         )
         translation_timed_out = False
+        # Only pass the language allowlist when the endpoint set one, so the
+        # default path keeps the original single-argument to_english() call.
+        translate = (
+            to_english(normalised, config.active_languages)
+            if config.active_languages
+            else to_english(normalised)
+        )
         try:
             english_content, detected_lang = await asyncio.wait_for(
-                to_english(normalised), timeout=timeout
+                translate, timeout=timeout
             )
         except asyncio.TimeoutError:
             english_content = normalised
@@ -397,7 +441,7 @@ class InputGuard(Guard):
             seen.add(candidate)
             candidates.append(candidate)
         for candidate in candidates:
-            hit = _scan_text(candidate)
+            hit = _scan_text(candidate, config)
             if hit is not None:
                 hit.detail += suffix
                 return hit
