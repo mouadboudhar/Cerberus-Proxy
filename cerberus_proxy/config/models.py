@@ -39,10 +39,26 @@ class Endpoint(Base):
     disabled_input_rules: Mapped[str | None] = mapped_column(Text, nullable=True)
     custom_blocked_phrases: Mapped[str | None] = mapped_column(Text, nullable=True)
     active_languages: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Custom Prompt Guard (Stage 14c) — OPTIONAL LLM-as-judge POLICY layer.
+    # NON-DETERMINISTIC: evaluating a message costs one extra LLM call (latency
+    # + API spend) and may vary between runs. This enforces business policy, not
+    # security; the deterministic Input/Output guards remain the security base.
+    prompt_guard_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0", nullable=False
+    )
+    prompt_guard_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    prompt_guard_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    prompt_guard_action: Mapped[str] = mapped_column(
+        String(20), default="block", server_default="block", nullable=False
+    )
 
     @property
     def has_knowledge_base(self) -> bool:
         return bool(self.kb_type and self.kb_url)
+
+    @property
+    def has_prompt_guard(self) -> bool:
+        return bool(self.prompt_guard_enabled and self.prompt_guard_prompt is not None)
 
     @property
     def get_disabled_input_rules(self) -> list[str]:

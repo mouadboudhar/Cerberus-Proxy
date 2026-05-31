@@ -46,6 +46,10 @@ _UPDATABLE_FIELDS = {
     "disabled_input_rules",
     "custom_blocked_phrases",
     "active_languages",
+    "prompt_guard_enabled",
+    "prompt_guard_prompt",
+    "prompt_guard_model",
+    "prompt_guard_action",
 }
 
 

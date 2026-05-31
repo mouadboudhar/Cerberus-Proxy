@@ -31,6 +31,7 @@ from cerberus_proxy.guards.base import DEFAULT_GUARD_CONFIG, GuardConfig
 from cerberus_proxy.db import init_db
 from cerberus_proxy.guards.input_guard import InputGuard
 from cerberus_proxy.guards.output_guard import OutputGuard
+from cerberus_proxy.guards.prompt_guard import PromptGuard
 from cerberus_proxy.guards.translator import warm_up
 from cerberus_proxy.ratelimit.abuse import AbuseDetector
 from cerberus_proxy.ratelimit.middleware import check_rate_limits
@@ -41,6 +42,7 @@ logger = logging.getLogger("cerberus_proxy.proxy")
 
 _input_guard = InputGuard()
 _output_guard = OutputGuard()
+_prompt_guard = PromptGuard()
 _abuse_detector = AbuseDetector()
 
 
@@ -188,6 +190,66 @@ async def _forward(
         request_id=request_id,
     )
 
+    # Custom Prompt Guard (Stage 14c) — OPTIONAL, NON-DETERMINISTIC policy
+    # layer. Runs only when the endpoint enables it; adds one LLM round-trip
+    # (latency + cost). Always fails open: PromptGuard.evaluate never raises,
+    # so a guard failure can never block a legitimate request.
+    policy_warning = False
+    if endpoint is not None and endpoint.has_prompt_guard:
+        provider_key = request.headers.get("authorization", "")
+        if provider_key.lower().startswith("bearer "):
+            provider_key = provider_key[7:]
+        try:
+            allowed, reason = await _prompt_guard.evaluate(
+                user_content,
+                endpoint.prompt_guard_prompt,
+                endpoint.prompt_guard_model or "gpt-4o-mini",
+                endpoint.upstream_url,
+                provider_key,
+            )
+        except Exception as e:  # noqa: BLE001 — defence in depth, always fail open
+            logger.warning("Prompt guard evaluation error: %s", e)
+            allowed, reason = True, "prompt_guard_error"
+        action = endpoint.prompt_guard_action or "block"
+        if allowed:
+            await emit(
+                EventType.PROMPT_GUARD_PASSED,
+                key_id=key_id,
+                endpoint_id=endpoint_id,
+                request_id=request_id,
+            )
+        else:
+            # Policy violation detected — always audit it; whether the request
+            # is actually blocked depends on the endpoint's configured action.
+            await emit(
+                EventType.PROMPT_GUARD_BLOCKED,
+                severity="MEDIUM",
+                key_id=key_id,
+                endpoint_id=endpoint_id,
+                detail={
+                    "reason_code": "POLICY_VIOLATION",
+                    "action": action,
+                    "detail": reason,
+                },
+                request_id=request_id,
+            )
+            if action == "block":
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "error": "blocked_by_guard",
+                        "guard": "prompt_guard",
+                        "reason_code": "POLICY_VIOLATION",
+                        "severity": "MEDIUM",
+                        "detail": reason,
+                    },
+                )
+            if action == "warn":
+                logger.warning("Prompt guard warning: %s", reason)
+                policy_warning = True
+            elif action == "log_only":
+                logger.info("Prompt guard (log only): %s", reason)
+
     # Knowledge-base retrieval: only endpoints with a configured KB trigger
     # this. The default route passes endpoint=None and is skipped. A failing
     # KB must never break the request — forward without injected context.
@@ -240,13 +302,17 @@ async def _forward(
         latency_ms=upstream_latency,
         request_id=request_id,
     )
-    return await _apply_output_guard(
+    response = await _apply_output_guard(
         result,
         key_id=key_id,
         endpoint_id=endpoint_id,
         request_id=request_id,
         config=guard_config,
     )
+    if policy_warning:
+        # warn action: the policy flagged the message but we forwarded it.
+        response.headers["X-Cerberus-Policy-Warning"] = "true"
+    return response
 
 
 def _extract_assistant_content(result: dict) -> str | None:

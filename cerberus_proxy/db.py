@@ -38,6 +38,7 @@ async def init_db() -> None:
         await _migrate_api_keys_endpoint_id(conn)
         await _migrate_endpoint_kb_columns(conn)
         await _migrate_endpoint_guard_columns(conn)
+        await _migrate_endpoint_prompt_guard_columns(conn)
 
 
 async def _migrate_api_keys_rate_limits(conn) -> None:
@@ -84,6 +85,21 @@ async def _migrate_endpoint_guard_columns(conn) -> None:
     ):
         if col not in existing:
             await conn.execute(text(f"ALTER TABLE endpoints ADD COLUMN {col} TEXT"))
+
+
+async def _migrate_endpoint_prompt_guard_columns(conn) -> None:
+    # Stage 14c: optional LLM-as-judge prompt guard config columns.
+    result = await conn.execute(text("PRAGMA table_info(endpoints)"))
+    existing = {row[1] for row in result.fetchall()}
+    coldefs = {
+        "prompt_guard_enabled": "BOOLEAN NOT NULL DEFAULT 0",
+        "prompt_guard_prompt": "TEXT",
+        "prompt_guard_model": "VARCHAR(100)",
+        "prompt_guard_action": "VARCHAR(20) NOT NULL DEFAULT 'block'",
+    }
+    for col, ddl in coldefs.items():
+        if col not in existing:
+            await conn.execute(text(f"ALTER TABLE endpoints ADD COLUMN {col} {ddl}"))
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

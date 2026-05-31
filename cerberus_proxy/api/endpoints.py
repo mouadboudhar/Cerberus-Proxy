@@ -32,6 +32,12 @@ class Provider(str, Enum):
     nvidia = "nvidia"
 
 
+class PromptGuardAction(str, Enum):
+    block = "block"
+    warn = "warn"
+    log_only = "log_only"
+
+
 class EndpointCreate(BaseModel):
     name: str
     provider: Provider
@@ -56,6 +62,10 @@ class EndpointUpdate(BaseModel):
     disabled_input_rules: list[str] | None = None
     custom_blocked_phrases: list[str] | None = None
     active_languages: list[str] | None = None
+    prompt_guard_enabled: bool | None = None
+    prompt_guard_prompt: str | None = None
+    prompt_guard_model: str | None = None
+    prompt_guard_action: PromptGuardAction | None = None
 
 
 _EMPTY_STATS = {
@@ -87,6 +97,10 @@ def _serialize(endpoint: Endpoint, stats: dict) -> dict:
         "disabled_input_rules": endpoint.get_disabled_input_rules,
         "custom_blocked_phrases": endpoint.get_custom_blocked_phrases,
         "active_languages": endpoint.get_active_languages,
+        "prompt_guard_enabled": endpoint.prompt_guard_enabled,
+        "prompt_guard_prompt": endpoint.prompt_guard_prompt,
+        "prompt_guard_model": endpoint.prompt_guard_model,
+        "prompt_guard_action": endpoint.prompt_guard_action,
         "created_at": endpoint.created_at.isoformat() if endpoint.created_at else None,
         "stats": stats,
     }
