@@ -52,7 +52,16 @@ def _update_env_file(path: str, key: str, value: str) -> bool:
     return True
 
 
-@router.post("/verify")
+@router.post(
+    "/verify",
+    summary="Verify dashboard token",
+    description=(
+        "Validate a dashboard token supplied in the request body. This is the "
+        "dashboard login endpoint and is intentionally unauthenticated (the "
+        "token is the credential being checked). Returns `valid: true` on a "
+        "match, or 401 `invalid_dashboard_token` otherwise."
+    ),
+)
 async def verify_token(body: TokenVerify) -> dict:
     expected = os.getenv(_TOKEN_ENV)
     if not expected or not hmac.compare_digest(body.token, expected):
@@ -60,7 +69,17 @@ async def verify_token(body: TokenVerify) -> dict:
     return {"valid": True}
 
 
-@router.post("/rotate", dependencies=[Depends(verify_dashboard_token)])
+@router.post(
+    "/rotate",
+    dependencies=[Depends(verify_dashboard_token)],
+    summary="Rotate dashboard token",
+    description=(
+        "Generate a new dashboard token, apply it to the live process "
+        "immediately (invalidating the current one), and best-effort persist "
+        "it to the .env file. Requires the current token in the "
+        "X-Dashboard-Token header. Returns the new token once."
+    ),
+)
 async def rotate_token() -> dict:
     new_token = secrets.token_urlsafe(32)
     # Update the live process env first so the old token is rejected immediately,

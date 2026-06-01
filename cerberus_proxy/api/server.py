@@ -54,7 +54,16 @@ async def _database_ok() -> bool:
         return False
 
 
-@router.get("/info", dependencies=[Depends(verify_dashboard_token)])
+@router.get(
+    "/info",
+    dependencies=[Depends(verify_dashboard_token)],
+    summary="Server info and summary stats",
+    description=(
+        "Return version, uptime, database size, and aggregate usage stats "
+        "(active endpoints/keys, total and today's requests, blocked today, "
+        "average upstream latency). Requires the dashboard token."
+    ),
+)
 async def server_info() -> dict:
     audit = SQLiteAuditRepository(db.AsyncSessionLocal)
     stats = await audit.get_summary_stats()
@@ -71,7 +80,15 @@ async def server_info() -> dict:
     }
 
 
-@router.get("/health")
+@router.get(
+    "/health",
+    summary="Server health check",
+    description=(
+        "Public, unauthenticated liveness/readiness check. Reports overall "
+        "status, version, database connectivity, and uptime. Returns "
+        "`status: ok` when the database is reachable, `degraded` otherwise."
+    ),
+)
 async def server_health() -> dict:
     db_ok = await _database_ok()
     return {

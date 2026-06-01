@@ -64,7 +64,15 @@ async def _serialize(session: AsyncSession, key: ApiKey) -> dict:
     }
 
 
-@router.get("")
+@router.get(
+    "",
+    summary="List API keys",
+    description=(
+        "Return all API keys with their metadata, rate limits, and current "
+        "usage. The plaintext key value is never included — only the stored "
+        "hash exists after creation. Requires the dashboard token."
+    ),
+)
 async def list_keys() -> list[dict]:
     async with db.AsyncSessionLocal() as session:
         repo = SQLiteKeyRepository(session)
@@ -72,7 +80,16 @@ async def list_keys() -> list[dict]:
         return [await _serialize(session, key) for key in keys]
 
 
-@router.post("")
+@router.post(
+    "",
+    summary="Create an API key",
+    description=(
+        "Create a new API key, optionally bound to an endpoint. The plaintext "
+        "key (prefix `llmg_`) is returned exactly once in this response and is "
+        "never recoverable afterwards — only its hash is stored. Requires the "
+        "dashboard token."
+    ),
+)
 async def create_key(body: KeyCreate) -> dict:
     plaintext = generate_api_key()
     async with db.AsyncSessionLocal() as session:
@@ -89,7 +106,15 @@ async def create_key(body: KeyCreate) -> dict:
     return data
 
 
-@router.get("/{key_id}")
+@router.get(
+    "/{key_id}",
+    summary="Get an API key",
+    description=(
+        "Return a single API key's metadata, rate limits, and usage by id. "
+        "The plaintext key is never returned. 404 if the key does not exist. "
+        "Requires the dashboard token."
+    ),
+)
 async def get_key(key_id: int) -> dict:
     async with db.AsyncSessionLocal() as session:
         repo = SQLiteKeyRepository(session)
@@ -99,7 +124,15 @@ async def get_key(key_id: int) -> dict:
         return await _serialize(session, key)
 
 
-@router.delete("/{key_id}")
+@router.delete(
+    "/{key_id}",
+    summary="Revoke an API key",
+    description=(
+        "Revoke an API key by id, marking it inactive so it can no longer "
+        "authenticate. The row is retained for audit history. 404 if the key "
+        "does not exist. Requires the dashboard token."
+    ),
+)
 async def revoke_key(key_id: int) -> dict:
     async with db.AsyncSessionLocal() as session:
         repo = SQLiteKeyRepository(session)
@@ -111,7 +144,16 @@ async def revoke_key(key_id: int) -> dict:
     return {"revoked": True}
 
 
-@router.patch("/{key_id}/limits")
+@router.patch(
+    "/{key_id}/limits",
+    summary="Update API key rate limits",
+    description=(
+        "Override the per-key rate limits (requests per minute / hour / day). "
+        "Only the provided fields are changed; omit a field to leave it on the "
+        "deployment default. 404 if the key does not exist. Requires the "
+        "dashboard token."
+    ),
+)
 async def update_key_limits(key_id: int, body: LimitsUpdate) -> dict:
     async with db.AsyncSessionLocal() as session:
         repo = SQLiteKeyRepository(session)
@@ -124,7 +166,15 @@ async def update_key_limits(key_id: int, body: LimitsUpdate) -> dict:
         return await _serialize(session, key)
 
 
-@router.get("/{key_id}/usage")
+@router.get(
+    "/{key_id}/usage",
+    summary="Get API key usage",
+    description=(
+        "Return the current rate-limit usage counters for a key across the "
+        "minute / hour / day windows. 404 if the key does not exist. Requires "
+        "the dashboard token."
+    ),
+)
 async def key_usage(key_id: int) -> dict:
     async with db.AsyncSessionLocal() as session:
         repo = SQLiteKeyRepository(session)

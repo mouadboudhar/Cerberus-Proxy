@@ -106,7 +106,16 @@ def _serialize(endpoint: Endpoint, stats: dict) -> dict:
     }
 
 
-@router.get("")
+@router.get(
+    "",
+    summary="List endpoints",
+    description=(
+        "Return all active proxy endpoints with their provider/upstream "
+        "configuration, per-endpoint guard settings, knowledge-base and Prompt "
+        "Guard config, and per-endpoint usage stats. Soft-deleted (inactive) "
+        "endpoints are hidden. Requires the dashboard token."
+    ),
+)
 async def list_endpoints() -> list[dict]:
     async with db.AsyncSessionLocal() as session:
         repo = SQLiteEndpointRepository(session)
@@ -118,7 +127,17 @@ async def list_endpoints() -> list[dict]:
     ]
 
 
-@router.post("")
+@router.post(
+    "",
+    summary="Create an endpoint",
+    description=(
+        "Create a proxy endpoint: a named upstream configuration (provider, "
+        "upstream URL, default model) optionally including a knowledge base. "
+        "It becomes reachable at POST /v1/chat/completions/{id}. Guard rules "
+        "and the Prompt Guard are configured afterwards via PATCH. Requires "
+        "the dashboard token."
+    ),
+)
 async def create_endpoint(body: EndpointCreate) -> dict:
     async with db.AsyncSessionLocal() as session:
         repo = SQLiteEndpointRepository(session)
@@ -136,7 +155,15 @@ async def create_endpoint(body: EndpointCreate) -> dict:
         return _serialize(endpoint, dict(_EMPTY_STATS))
 
 
-@router.get("/{endpoint_id}")
+@router.get(
+    "/{endpoint_id}",
+    summary="Get an endpoint",
+    description=(
+        "Return a single endpoint by id, including its full guard "
+        "configuration and usage stats. 404 if the endpoint does not exist or "
+        "has been deleted. Requires the dashboard token."
+    ),
+)
 async def get_endpoint(endpoint_id: int) -> dict:
     async with db.AsyncSessionLocal() as session:
         repo = SQLiteEndpointRepository(session)
@@ -147,7 +174,18 @@ async def get_endpoint(endpoint_id: int) -> dict:
     return _serialize(endpoint, stats)
 
 
-@router.patch("/{endpoint_id}")
+@router.patch(
+    "/{endpoint_id}",
+    summary="Update an endpoint",
+    description=(
+        "Patch an endpoint. Only the provided fields change. This is where "
+        "per-endpoint guard policy is set: disabled input/output rules, custom "
+        "blocked phrases, active translation languages, knowledge-base "
+        "settings, and the Prompt Guard (enable, policy prompt, model, "
+        "action). 404 if the endpoint does not exist. Requires the dashboard "
+        "token."
+    ),
+)
 async def update_endpoint(endpoint_id: int, body: EndpointUpdate) -> dict:
     # mode="json" coerces the Provider enum to its string value.
     fields = body.model_dump(exclude_unset=True, mode="json")
@@ -167,7 +205,15 @@ async def update_endpoint(endpoint_id: int, body: EndpointUpdate) -> dict:
     return serialized_base
 
 
-@router.delete("/{endpoint_id}")
+@router.delete(
+    "/{endpoint_id}",
+    summary="Delete an endpoint",
+    description=(
+        "Soft-delete an endpoint (marks it inactive rather than dropping the "
+        "row) and revokes every API key bound to it. 404 if the endpoint does "
+        "not exist. Requires the dashboard token."
+    ),
+)
 async def delete_endpoint(endpoint_id: int) -> dict:
     async with db.AsyncSessionLocal() as session:
         repo = SQLiteEndpointRepository(session)

@@ -124,12 +124,33 @@ def _current_config() -> dict:
     }
 
 
-@router.get("/config")
+@router.get(
+    "/config",
+    summary="Get global guard configuration",
+    description=(
+        "Return the deployment-wide guard configuration assembled from "
+        "environment variables: input/output guard enabled flags and actions, "
+        "translation settings and timeout, plus the lists of available input "
+        "and output rule names and supported languages the dashboard uses to "
+        "build per-endpoint configuration UIs. Requires the dashboard token."
+    ),
+)
 async def get_guard_config() -> dict:
     return _current_config()
 
 
-@router.patch("/config")
+@router.patch(
+    "/config",
+    summary="Update global guard configuration",
+    description=(
+        "Patch the deployment-wide guard settings. Only the fields provided "
+        "are changed; each is applied to the live process environment "
+        "immediately and best-effort persisted to the .env file. Note that "
+        "today the running guards consume only the output-guard action and "
+        "translation timeout; the other flags are stored for the dashboard. "
+        "Returns the full effective configuration. Requires the dashboard token."
+    ),
+)
 async def update_guard_config(body: GuardConfigPatch) -> dict:
     updates: dict[str, str] = {}
     if body.input_guard is not None:
