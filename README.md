@@ -82,7 +82,7 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:8000/v1",   # was: https://api.openai.com/v1
-    api_key="llmg_your_cerberus_key",       # was: your provider key
+    api_key="cbrs_your_cerberus_key",       # was: your provider key
 )
 
 resp = client.chat.completions.create(

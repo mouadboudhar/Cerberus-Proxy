@@ -22,7 +22,7 @@ export default function LoginPage() {
       await apiRequest('/api/auth/verify', { method: 'POST', body: { token: token.trim() } });
       navigate('/overview');
     } catch {
-      localStorage.removeItem('llmg_token');
+      localStorage.removeItem('cbrs_token');
       setError('Invalid dashboard token.');
     } finally {
       setBusy(false);

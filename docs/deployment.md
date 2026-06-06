@@ -70,7 +70,7 @@ custom phrases, active languages, knowledge base, Prompt Guard) are set in the
 4. **Confirm health:** `curl http://localhost:8000/health` returns
    `{"status":"ok",...}`.
 5. **Log in** to the dashboard at `http://localhost:5173` with the token.
-6. **Create an API key** in the dashboard. The plaintext `llmg_…` value is
+6. **Create an API key** in the dashboard. The plaintext `cbrs_…` value is
    shown **once** — copy it now; only its hash is stored.
 7. **(Optional) Create endpoints** for per-tenant routing and per-endpoint
    guard policy, knowledge bases, or the Prompt Guard.

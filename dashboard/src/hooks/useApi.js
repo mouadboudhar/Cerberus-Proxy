@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-const TOKEN_KEY = 'llmg_token';
+const TOKEN_KEY = 'cbrs_token';
 
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY);

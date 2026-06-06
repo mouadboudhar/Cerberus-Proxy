@@ -9,7 +9,7 @@ SDK, no client-side security code, no request reshaping.
 Whatever OpenAI-compatible client you already use, change two things:
 
 1. the **base URL** → your Cerberus proxy
-2. the **API key** → a Cerberus key (`llmg_…`), created in the dashboard
+2. the **API key** → a Cerberus key (`cbrs_…`), created in the dashboard
 
 ### Before
 
@@ -34,7 +34,7 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:8000/v1",   # ← Cerberus proxy
-    api_key="llmg_...your-cerberus-key...", # ← Cerberus key
+    api_key="cbrs_...your-cerberus-key...", # ← Cerberus key
 )
 
 resp = client.chat.completions.create(
@@ -79,7 +79,7 @@ from langchain_openai import ChatOpenAI
 llm = ChatOpenAI(
     model="gpt-4o-mini",
     base_url="http://localhost:8000/v1",   # ← Cerberus proxy
-    api_key="llmg_...your-cerberus-key...", # ← Cerberus key
+    api_key="cbrs_...your-cerberus-key...", # ← Cerberus key
 )
 
 llm.invoke("Summarise this support ticket...")
@@ -105,7 +105,7 @@ Point your client's base URL at it:
 ```python
 client = OpenAI(
     base_url="http://localhost:8000/v1/chat/completions/3",  # endpoint #3
-    api_key="llmg_...",
+    api_key="cbrs_...",
 )
 ```
 
@@ -136,7 +136,7 @@ than treating it as a transport error:
 import httpx
 from openai import OpenAI
 
-client = OpenAI(base_url="http://localhost:8000/v1", api_key="llmg_...")
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="cbrs_...")
 
 try:
     resp = client.chat.completions.create(

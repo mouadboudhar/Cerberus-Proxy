@@ -161,7 +161,7 @@ export default function ApiKeysPage() {
                 {keys.map(k => (
                   <tr key={k.id} className={!k.is_active ? 'is-muted' : ''}>
                     <td><span className="font-medium" style={{ color: 'var(--text)', fontWeight: 600 }}>{k.name}</span></td>
-                    <td><code className="mono-pill">llmg_••••••••••••</code></td>
+                    <td><code className="mono-pill">cbrs_••••••••••••</code></td>
                     <td>
                       <span className="ep-pill">
                         <span className="ep-dot-sm" style={{ background: k.endpoint_id != null ? 'var(--accent)' : 'var(--text-4)' }} />

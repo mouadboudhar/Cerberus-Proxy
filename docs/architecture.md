@@ -179,7 +179,7 @@ These are two distinct concepts, deliberately decoupled:
   reached at `POST /v1/chat/completions/{endpoint_id}`.
 - An **API key** (`auth/models.py:ApiKey`) is a *credential* for calling the
   proxy. It carries its own rate limits and a soft reference to an endpoint.
-  Keys are stored only as SHA-256 hashes (the plaintext `llmg_…` value is shown
+  Keys are stored only as SHA-256 hashes (the plaintext `cbrs_…` value is shown
   once at creation and never persisted).
 
 The default route `POST /v1/chat/completions` has no endpoint: it uses the

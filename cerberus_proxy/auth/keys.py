@@ -2,11 +2,11 @@ import hashlib
 import hmac
 import secrets
 
-_KEY_PREFIX = "llmg_"
+_KEY_PREFIX = "cbrs_"
 
 
 def generate_api_key() -> str:
-    """Generate a cryptographically secure API key: "llmg_" + 32 url-safe random bytes."""
+    """Generate a cryptographically secure API key: "cbrs_" + 32 url-safe random bytes."""
     return _KEY_PREFIX + secrets.token_urlsafe(32)
 
 

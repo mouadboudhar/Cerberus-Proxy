@@ -85,7 +85,7 @@ async def list_keys() -> list[dict]:
     summary="Create an API key",
     description=(
         "Create a new API key, optionally bound to an endpoint. The plaintext "
-        "key (prefix `llmg_`) is returned exactly once in this response and is "
+        "key (prefix `cbrs_`) is returned exactly once in this response and is "
         "never recoverable afterwards — only its hash is stored. Requires the "
         "dashboard token."
     ),

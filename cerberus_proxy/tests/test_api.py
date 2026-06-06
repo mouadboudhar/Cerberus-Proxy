@@ -83,7 +83,7 @@ async def test_create_key_returns_plaintext_once(client, session_factory, auth):
     assert res.status_code == 200
     data = res.json()
     assert "key" in data
-    assert data["key"].startswith("llmg_")
+    assert data["key"].startswith("cbrs_")
 
 
 async def test_get_key_no_plaintext(client, session_factory, auth):

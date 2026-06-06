@@ -13,7 +13,7 @@ UPSTREAM_URL = "https://api.openai.com/v1/chat/completions"
 
 def test_generate_key_format():
     key = generate_api_key()
-    assert key.startswith("llmg_")
+    assert key.startswith("cbrs_")
     assert len(key) >= 40
 
 
