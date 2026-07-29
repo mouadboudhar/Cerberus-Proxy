@@ -4,5 +4,3 @@ updates:
     directory: "/dashboard"
     schedule:
       interval: "weekly"
-    ignore:
-      - dependency-name: "react-router"
