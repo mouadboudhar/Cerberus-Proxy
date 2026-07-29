@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { apiRequest, setToken } from '../hooks/useApi';
 
 export default function LoginPage() {

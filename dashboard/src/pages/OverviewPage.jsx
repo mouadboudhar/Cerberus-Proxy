@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import TopBar      from '../components/TopBar';
 import SevBadge    from '../components/SevBadge';
 import Sparkline   from '../components/Sparkline';
